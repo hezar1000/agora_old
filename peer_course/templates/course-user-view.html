@@ -1,0 +1,50 @@
+{% extends "form_simp_base.html" %}
+
+{% load get_function_result %}
+{% load tag_review_exists %}
+{% load deadline_not_passed %}
+{% load get_pending_reviews %}
+{% load has_review %}
+{% load get_my_reviews %}
+
+
+
+
+{% block content %}
+    
+<div class="container-fluid">
+
+
+  <div class="col-md-4 col-md-offset-2">
+  
+    <div class="page-header">
+      <h2>User {{ user.first_name }} {{ user.last_name }}</h2>  
+    </div>
+    <h4>User ID: {{ user.username }}</h4>
+    <h4>Email: {{ user.email }}</h4>  
+    <a class="btn btn-primary" href="{% url 'account:edit' user.id %}">Edit User Information</a>
+
+  </div>
+
+
+   <div class="row">
+    {%if is_a_student or is_a_ta %}
+    <p>
+      {{user.first_name}} {{user.last_name}}'s lower bound dependability score is: {{coursemember.lower_confidence_bound}} </br>
+      {{user.first_name}} {{user.last_name}}'s realistic dependability score is: {{coursemember.markingload}}</br>
+      {%if is_a_student and is_independent%}
+        {{user.first_name}} {{user.last_name}}'s <span style="color: blue"> Independent.</span> 
+      {%else%}
+      {{user.first_name}} {{user.last_name}} is <span style="color: red"> Supervised.</span>
+      {%endif%}
+      <!-- <span style="color: blue"> {{coursemember.markingload}} (CI: [{{coursemember.lower_confidence_bound}}, {{coursemember.upper_confidence_bound}}])</span> -->
+    </p>
+    </div>
+
+    {%endif%}
+
+
+
+
+</div>
+{% endblock %}
