@@ -225,7 +225,7 @@ class HomeViews:
             list_lid = [2]
         if lid == 3 and course.points_upon_participation_in_red_list == 0:
             list_lid = [3]
-        if lid == 3 and course.points_upon_participation_in_yellow_list == 0:
+        if lid == 4 and course.points_upon_participation_in_yellow_list == 0:
             list_lid = [4]
 
 
