@@ -72,6 +72,23 @@
         width: 80%;
     }
 
+    @media screen and (max-width: 400px) {
+        #poll-header {
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #poll-actions div {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #poll-actions button {
+            width: 100%;
+        }
+    }
+
 </style>
 
 {% if not saved_polls %}

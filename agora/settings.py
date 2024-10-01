@@ -30,6 +30,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+ALLOWED_IPS = ['127.0.0.1']
+
 DATA_UPLOAD_MAX_MEMORY_SIZE = 20971520
 FILE_UPLOAD_PERMISSIONS = 0o644
 
@@ -106,7 +108,7 @@ SITE_ID = 1
 DATABASES = {
     #'mysql': {
     #    'ENGINE': 'django.db.backends.mysql',
-    #    'NAME': 'mta',
+    #    'NAME': 'agora',
     #    'USER': 'root',
     # 	'PASSWORD': 'soldrecT',
     # 	'HOST': '127.0.0.1',
@@ -153,9 +155,9 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR + STATIC_URL
 STATIC_DICT = {
     "peer_home": BASE_DIR + "/peer_home/static",
+    "peer_course": BASE_DIR + "/peer_course/static",
     #'peer_auth': BASE_DIR + '/peer_auth/static',
 }
-
 
 # For serving files
 ENV_PATH = os.path.abspath(os.path.dirname(__file__))
@@ -167,10 +169,7 @@ MEDIA_URL = "/media/"
 # needs to run 'python3 manage.py runcrons'
 # http://django-cron.readthedocs.io/en/latest/installation.html
 CRON_CLASSES = [
-    "peer_assignment.cron.ReleaseAssignment",
-    # "peer_assignment.cron.ExportAssignment",
-    "peer_assignment.cron.StopTAtimer"
-    # ...
+    "peer_lecture.cron.AutoEndLectureCronJob",
 ]
 
 LOGGING = {
@@ -214,12 +213,12 @@ LOGGING = {
             "level": "INFO",
             "propagate": True,
         },
-        "mta.events": {
+        "agora.events": {
             "handlers": ["default_log", "events_log"],
             "level": "INFO",
             "propagate": True,
         },
-        "mta.debug": {
+        "agora.debug": {
             "handlers": ["default_log", "debug_log"],
             "level": "INFO",
             "propagate": True,

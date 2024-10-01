@@ -9,7 +9,11 @@ from django.shortcuts import render as djangoRender
 from django.http import JsonResponse
 from django.contrib import messages
 import numpy as np
-
+from collections import defaultdict
+import random
+import heapq
+import atexit
+from django.db.models import Count
 
 from itertools import chain
 
@@ -25,7 +29,8 @@ from peer_course.base import CoursePermissions
 
 from peer_lecture.views import *
 
-from datetime import timedelta
+from datetime import timedelta, time
+
 
 class HomeViews:
     @staticmethod
@@ -54,20 +59,20 @@ class HomeViews:
         course = Course._default_manager.get(id=cid)
         request.session["course_id"] = course.id
         request.session['course_role'] = course.id
-        
-        if request.method == 'POST':
-            if 'begin-lecture' in request.POST:
-                render_dict['lecture'] = "true"
-                PollViews.instructor(request)
-                MessageViews.instructor(request)
-            elif 'end-lecture' in request.POST:
-                PollViews.instructor(request)
-                MessageViews.instructor(request)
-        
-        current_lecture = Lecture.currentLecture(course.id)
-        
-        if current_lecture:
-            render_dict['lecture'] = current_lecture
+
+        coursemember = CourseBase.get_course_member(request.user, course.id)
+
+        render_dict["coursemember"] = coursemember
+
+        # client_ip = request.META.get('HTTP_X_FORWARDED_FOR')
+
+        # if not client_ip:
+        #     client_ip = request.META.get('REMOTE_ADDR')
+
+        PollViews.instructor(request)
+        MessageViews.instructor(request)
+
+        render_dict['lecture'] = Lecture.currentLecture(course.id)
 
         if "next" in request.GET:
             return HttpResponseRedirect(request.GET["next"])
@@ -75,122 +80,17 @@ class HomeViews:
         if course.enable_participation == False: 
             render_dict["course"] = course
 
-            coursemember = CourseBase.get_course_member(request.user, course.id)
-
-
-
-            render_dict["coursemember"] = coursemember
-            if not request.user.is_superuser:
-                render_dict["dependability_min"]= round(coursemember.lower_confidence_bound,3)
-                render_dict["dependability_mean"]= round(coursemember.markingload,3)
-                render_dict["dependability_max"]= round(coursemember.upper_confidence_bound,3)
-
-
-    #            render_dict["dependability_min"]= round(CalibrationBase.convert_dependability_to_grade(coursemember.lower_confidence_bound),3)
-    #            render_dict["dependability_mean"]= round(CalibrationBase.convert_dependability_to_grade(coursemember.markingload),3)
-    #            render_dict["dependability_max"]= round(CalibrationBase.convert_dependability_to_grade(coursemember.upper_confidence_bound),3)
-            if coursemember.role == 'ta':
-                # inapt_reports = InaptReport.objects.filter(assignee__id=coursemember.id)
-                # inapt_timer = sum([x.timer for x in inapt_reports])
-                # appeals = Appeal.objects.filter(assignee__id=coursemember.id)
-                # appeal_time = sum([x.timer for x in appeals])
-                # reviews = ReviewAssignment.objects.filter(grader__id=coursemember.id)
-                # review_time = sum([x.timer for x in reviews])
-                # evaluations = EvaluationAssignment.objects.filter(grader__id=coursemember.id)
-                # evaluation_time = sum([x.timer for x in evaluations])
-                # time = round(appeal_time + review_time + inapt_timer + evaluation_time)
-                # render_dict["timer"] = str(datetime.timedelta(seconds=time))
-                participations = CourseParticipation.objects.filter(participant = coursemember).order_by('-id')
-                ending_participations = participations.filter(participation_list = 11)
-                timer = timedelta(seconds = 0)
-                for participation in ending_participations:
-                    starting_participation  = participations[list(participations).index(participation)+1]
-                    if starting_participation.participation_list == 10:
-                        time_spent = participation.time_participated - starting_participation.time_participated
-                        if time_spent > timedelta(seconds = 0):
-                            timer += time_spent
-                render_dict["timer"] = str(timer)
-                    
+       
             return render(request, "course-view-redesign.html", render_dict)
 
         else:
-            # render_dict["course"] = course
-            # time_of_request = timezone.now()
-            # coursemember = CourseBase.get_course_member(request.user, course.id)
-            # render_dict["coursemember"] = coursemember
-            # participations = CourseParticipation.objects.filter(
-            #     participant = coursemember,
-            #     count_in_calculations = True
-            # )
-            # participations_today = participations.filter(time_participated__startswith = time_of_request.date())
-            # green_points = 0 
-            # blue_points = 0
-            # red_points = 0
-            # yellow_points = 0
-            # total_points = 0 
-            # total_points_today = 0
-            # for participation in participations.filter(participation_list=1):
-            #     green_points += participation.participation_points_gained
-            #     total_points += participation.participation_points_gained
-            # for participation in participations.filter(participation_list=2):
-            #     blue_points += participation.participation_points_gained
-            #     total_points += participation.participation_points_gained
-            # for participation in participations.filter(participation_list=3):
-            #     red_points += participation.participation_points_gained
-            #     total_points += participation.participation_points_gained
-            # for participation in participations.filter(participation_list=4):
-            #     yellow_points += participation.participation_points_gained
-            #     total_points += participation.participation_points_gained
-
-            # for participation in participations_today:
-            #     total_points_today += participation.participation_points_gained
-
-                
-            # render_dict["green_points"]= green_points
-            # render_dict["blue_points"]= blue_points
-            # render_dict["red_points"]= red_points
-            # render_dict["yellow_points"]= yellow_points
-            # render_dict["total_points"]= total_points
-            # render_dict["total_points_today"]= total_points_today
-
-            render_dict["course"] = course
-
-            coursemember = CourseBase.get_course_member(request.user, course.id)
             
-            if not request.user.is_superuser:
-                render_dict["coursemember"] = coursemember
-                render_dict["dependability_min"]= round(coursemember.lower_confidence_bound,3)
-                render_dict["dependability_mean"]= round(coursemember.markingload,3)
-                render_dict["dependability_max"]= round(coursemember.upper_confidence_bound,3)
+            render_dict["course"] = course
+            render_dict["enable_participation"] = True
 
 
-    #            render_dict["dependability_min"]= round(CalibrationBase.convert_dependability_to_grade(coursemember.lower_confidence_bound),3)
-    #            render_dict["dependability_mean"]= round(CalibrationBase.convert_dependability_to_grade(coursemember.markingload),3)
-    #            render_dict["dependability_max"]= round(CalibrationBase.convert_dependability_to_grade(coursemember.upper_confidence_bound),3)
-            if coursemember.role == 'ta':
-                # inapt_reports = InaptReport.objects.filter(assignee__id=coursemember.id)
-                # inapt_timer = sum([x.timer for x in inapt_reports])
-                # appeals = Appeal.objects.filter(assignee__id=coursemember.id)
-                # appeal_time = sum([x.timer for x in appeals])
-                # reviews = ReviewAssignment.objects.filter(grader__id=coursemember.id)
-                # review_time = sum([x.timer for x in reviews])
-                # evaluations = EvaluationAssignment.objects.filter(grader__id=coursemember.id)
-                # evaluation_time = sum([x.timer for x in evaluations])
-                # time = round(appeal_time + review_time + inapt_timer + evaluation_time)
-                # render_dict["timer"] = str(datetime.timedelta(seconds=time))
-                participations = CourseParticipation.objects.filter(participant = coursemember).order_by('-id')
-                ending_participations = participations.filter(participation_list = 11)
-                timer = timedelta(seconds = 0)
-                for participation in ending_participations:
-                    starting_participation  = participations[list(participations).index(participation)+1]
-                    if starting_participation.participation_list == 10:
-                        time_spent = participation.time_participated - starting_participation.time_participated
-                        if time_spent > timedelta(seconds = 0):
-                            timer += time_spent
-                render_dict["timer"] = str(timer)
-
-            return render(request, "course-view.html", render_dict)        
-
+            return render(request, "course-view.html", render_dict)
+    
     @staticmethod
     def random_student_helper(request, lid):
         channel_layer = get_channel_layer()
@@ -261,63 +161,80 @@ class HomeViews:
                 return JsonResponse(render_dict)
 
             all_participations = CourseParticipation.objects.filter(
-                participant__in = students,
-                participation_list__in = list_lid,
-                count_in_calculations = True
+                participant__in=students,
+                participation_list__in=list_lid,
+                count_in_calculations=True
             )
+            # print(students)
+            # print(all_participations)
 
             std_participations = all_participations.filter(
                 time_participated__startswith = time_of_request.date(),
             )
+
+            # Perform bulk queries
+            existing_participations = std_participations.values('participant').distinct()
+
+            spoken_participations = std_participations.filter(spoke_upon_participation=True).values('participant').distinct()
+
+            all_spoken_counts = all_participations.filter(spoke_upon_participation=True).values('participant').annotate(
+                spoken_count=Count('id')
+            )
+
+            # Create dictionaries for faster lookup
+            existing_participations_set = set(p['participant'] for p in existing_participations)
+
+            spoken_participations_set = set(p['participant'] for p in spoken_participations)
+
+            all_spoken_dict = {p['participant']: max(p['spoken_count'], 2) for p in all_spoken_counts}
+
+            # Prepare bulk create list
+            participations_to_create = []
+
+            list_of_spoken = []
+            list_of_unspoken = []
+            list_of_spoken_counts = []
+            list_of_unspoken_counts = []
+
             if students.exists():
-                list_of_spoken= []
-                list_of_unspoken=[]
-                list_of_spoken_counts= []
-                list_of_unspoken_counts= []
                 for student in students:
-                    std_participation = std_participations.filter(participant = student)
-                    if not std_participation.exists():
-                        CourseParticipation.objects.create(
-                            participant  = student, 
-                            time_participated = time_of_request,
-                            participation_points_gained = participation_points_to_gain,
-                            spoke_upon_participation = False,
-                            participation_list= lid
-                        )
+                    # Create new participation
+                    new_participation = CourseParticipation(
+                        participant=student,
+                        time_participated=time_of_request,
+                        participation_list=lid,
+                        spoke_upon_participation=False
+                    )
+
+                    if student.id not in existing_participations_set:
+                        new_participation.participation_points_gained = participation_points_to_gain
                     else:
-                        CourseParticipation.objects.create(
-                            participant  = student, 
-                            time_participated = time_of_request,
-                            participation_points_gained = participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations ,
-                            participation_list= lid
-                        )
+                        new_participation.participation_points_gained = participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations
 
-                    spoken_participations = std_participations.filter(participant= student, spoke_upon_participation = True, participation_list__in= list_lid )
-                    spoken_count = all_participations.filter(participant= student, spoke_upon_participation = True, participation_list__in= list_lid).count()
-                    spoken_count = spoken_count if spoken_count > 1 else 2
-
-                    if spoken_participations.exists() and student not in list_of_spoken:
+                    # Handle spoken/unspoken logic
+                    spoken_count = all_spoken_dict.get(student.id, 2)
+                    inverse_log_count = 1 / np.log2(spoken_count)
+                    if student.id in spoken_participations_set and student not in list_of_spoken:
                         list_of_spoken.append(student)
-                        part = CourseParticipation.objects.get(
-                            participant = student,
-                            time_participated = time_of_request
-                        )
-                        part.real_participation = False
-                        part.save()
-                        list_of_spoken_counts.append(1/np.log2(spoken_count))
-                    if not spoken_participations.exists() and student not in list_of_unspoken:
+                        list_of_spoken_counts.append(inverse_log_count)
+                        new_participation.real_participation = False
+                    elif student.id not in spoken_participations_set and student not in list_of_unspoken:
                         list_of_unspoken.append(student)
-                        list_of_unspoken_counts.append(1/np.log2(spoken_count))
+                        list_of_unspoken_counts.append(inverse_log_count)
 
+                    # Append new_participation after all modifications
+                    participations_to_create.append(new_participation)
 
-                list_of_spoken_counts= np.array(list_of_spoken_counts)
-                list_of_unspoken_counts= np.array(list_of_unspoken_counts)
+                # Bulk create
+                CourseParticipation.objects.bulk_create(participations_to_create)
 
+                # Convert to numpy arrays and normalize
+                list_of_spoken_counts = np.array(list_of_spoken_counts)
+                list_of_unspoken_counts = np.array(list_of_unspoken_counts)
 
-                list_of_spoken_counts_norm = list_of_spoken_counts/sum(list_of_spoken_counts)
-                list_of_unspoken_counts_norm = list_of_unspoken_counts/sum(list_of_unspoken_counts)
+                list_of_spoken_counts_norm = np.divide(list_of_spoken_counts, np.sum(list_of_spoken_counts)) if list_of_spoken_counts.size > 0 else np.array([])
+                list_of_unspoken_counts_norm = np.divide(list_of_unspoken_counts, np.sum(list_of_unspoken_counts)) if list_of_unspoken_counts.size > 0 else np.array([])
 
-                    
                 if list_of_unspoken:
                     unspoken_student = np.random.choice(list_of_unspoken, p = list_of_unspoken_counts_norm)
 
@@ -380,39 +297,56 @@ class HomeViews:
                     count_in_calculations = True
                 )
 
-                students_for_bonus_credit = list(participations_to_consider.values_list('participant',flat= True).distinct())
+                # Get all distinct participant IDs for the bonus credit
+                students_for_bonus_credit = set(participations_to_consider.values_list('participant_id', flat=True))
 
+                # Fetch existing participations in one query
+                existing_participations = set(
+                    CourseParticipation.objects.filter(
+                        participant_id__in=students_for_bonus_credit,
+                        time_participated=time_of_request,
+                        participation_list=lid,
+                        count_in_calculations=True
+                    ).values_list('participant_id', flat=True)
+                )
 
+                # Prepare the new participations to be created in bulk
+                new_participations = []
+
+                date_first_class_ends = timezone.now()
+                new_time = date_first_class_ends.replace(hour=23, minute=59)
+                time_threshold = time(hour = 16, minute = 59)
+                # Iterate over student IDs and determine if new participations need to be created
                 for std_id in students_for_bonus_credit:
-                    if  not CourseParticipation.objects.filter(
-                            participant_id  = std_id, 
-                            time_participated = time_of_request,
-                            participation_list= lid,
-                            count_in_calculations = True
-                        ).exists():
-                        date_first_class_ends = timezone.now()
-                        new_time = date_first_class_ends.replace(hour =22, minute = 00)
-                        # if participations_to_consider.filter(participant_id  = std_id, time_participated__lte = new_time).exists() and timezone.now().time() > datetime.time(22, 00, 00, 000000):
-                        if False:
-                            CourseParticipation.objects.create(
-                                participant_id  = std_id, 
-                                time_participated = time_of_request,
-                                participation_points_gained = participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations,
-                                spoke_upon_participation = False,
-                                participation_list= lid,
-                                real_participation = False,
-                                count_in_calculations = False
+                    if std_id not in existing_participations:
+                        if participations_to_consider.filter(participant_id=std_id, time_participated__lte=new_time).exists() and timezone.localtime(timezone.now()).time() > time_threshold:
+                        # if False:
+                            new_participations.append(
+                                CourseParticipation(
+                                    participant_id=std_id,
+                                    time_participated=time_of_request,
+                                    participation_points_gained=participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations,
+                                    spoke_upon_participation=False,
+                                    participation_list=lid,
+                                    real_participation=False,
+                                    count_in_calculations=False
+                                )
                             )
                         else:
-                            CourseParticipation.objects.create(
-                                participant_id  = std_id, 
-                                time_participated = time_of_request,
-                                participation_points_gained = participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations,
-                                spoke_upon_participation = False,
-                                participation_list= lid,
-                                real_participation = False,
-                                count_in_calculations = True
+                            new_participations.append(
+                                CourseParticipation(
+                                    participant_id=std_id,
+                                    time_participated=time_of_request,
+                                    participation_points_gained=participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations,
+                                    spoke_upon_participation=False,
+                                    participation_list=lid,
+                                    real_participation=False,
+                                    count_in_calculations=True
+                                )
                             )
+
+                # Bulk create all new participations at once
+                CourseParticipation.objects.bulk_create(new_participations)
 
             else:
                 render_dict['student']= 'No available student in the '+color+' list.'
@@ -431,8 +365,122 @@ class HomeViews:
         
         else:
             render_dict['student']= 'You are not an instructor in this course.'
-
         return JsonResponse(render_dict) 
+        # channel_layer = get_channel_layer()
+        # cid = request.session.get("course_id")
+        # course = Course.objects.filter(id=cid).first()
+
+        # CoursePermissions.require_instructor(request.user, cid)
+        # coursemember = CourseBase.get_course_member(request.user, course.id)
+        
+        # render_dict = {}
+
+        # lid = int(lid)
+        # lid_map = {
+        #     1: {'color': 'Green', 'points': course.points_upon_participation_in_green_list, 'list': 'hand_up'},
+        #     2: {'color': 'Blue', 'points': course.points_upon_participation_in_blue_list, 'list': 'hand_up_list_2'},
+        #     3: {'color': 'Red', 'points': course.points_upon_participation_in_red_list, 'list': 'hand_up_list_3'},
+        #     4: {'color': 'Yellow', 'points': course.points_upon_participation_in_yellow_list, 'list': 'hand_up_list_4'},
+        # }
+
+        # color = lid_map[lid]['color']
+        # list_name = lid_map[lid]['list']
+        # activate = getattr(coursemember, list_name)
+
+        # if not activate:
+        #     render_dict['student'] = f"You should enable the hand up feature for the {color} list first."
+        #     render_dict['student_id'] = 'None'
+        #     return JsonResponse(render_dict)
+
+        # time_of_request = timezone.now()
+        # students = CourseMember.objects.filter(course=course, role='student', active=True, **{list_name: True})
+        # all_participations = CourseParticipation.objects.filter(
+        #     participant__in=students,
+        #     participation_list=lid,
+        #     count_in_calculations=True
+        # )
+
+        # std_participations = all_participations.filter(time_participated__date=time_of_request.date())
+        
+        # if students.exists():
+        #     # Fetch all spoken counts at once
+        #     spoken_counts = std_participations.filter(spoke_upon_participation=True).values('participant').annotate(count=Count('participant'))
+        #     spoken_counts_dict = {item['participant']: item['count'] for item in spoken_counts}
+
+        #     # Create a dictionary to store spoken counts for each student
+        #     student_counts = defaultdict(int)
+        #     for student in students:
+        #         student_counts[student] = spoken_counts_dict.get(student, 0)
+
+        #     # Determine unspoken students
+        #     unspoken_students = [student for student, count in student_counts.items() if count == 0]
+
+        #     # If there are unspoken students, select one randomly
+        #     if unspoken_students:
+        #         unspoken_counts = {student: 1 / np.log2(count or 2) for student, count in student_counts.items()}
+        #         selected_student = random.choices(list(unspoken_counts.keys()), weights=list(unspoken_counts.values()), k=1)[0]
+        #     # If all students have spoken, select one randomly from spoken students
+        #     elif student_counts:
+        #         spoken_counts = {student: 1 / np.log2(count or 2) for student, count in student_counts.items()}
+        #         selected_student = random.choices(list(spoken_counts.keys()), weights=list(spoken_counts.values()), k=1)[0]
+        #     # If no students are available
+        #     else:
+        #         render_dict['student'] = f'No available student in the {color} list.'
+        #         render_dict['student_id'] = 'None'
+        #         return JsonResponse(render_dict)
+
+        #     selected_student_name = f"{selected_student.user.first_name} {selected_student.user.last_name}"
+        #     render_dict['student'] = selected_student_name
+        #     render_dict['student_id'] = selected_student.user.username
+
+        #     setattr(selected_student, list_name, False)
+        #     selected_student.save()
+
+        #     participation, _ = CourseParticipation.objects.get_or_create(
+        #         participant=selected_student,
+        #         time_participated=time_of_request,
+        #         participation_points_gained=lid_map[lid]['points'],
+        #         participation_list=lid
+        #     )
+        #     participation.spoke_upon_participation = True
+        #     participation.save()
+
+        #     students_for_bonus_credit = all_participations.values_list('participant', flat=True).distinct()
+            
+        #     for student_id in students_for_bonus_credit:
+        #         if not CourseParticipation.objects.filter(
+        #             participant_id=student_id,
+        #             time_participated=time_of_request,
+        #             participation_list=lid,
+        #             count_in_calculations=True
+        #         ).exists():
+        #             CourseParticipation.objects.create(
+        #                 participant_id=student_id,
+        #                 time_participated=time_of_request,
+        #                 participation_points_gained=lid_map[lid]['points'] * course.fraction_of_points_gained_upon_further_participations,
+        #                 spoke_upon_participation=False,
+        #                 participation_list=lid,
+        #                 real_participation=False,
+        #                 count_in_calculations=True
+        #             )
+
+        # else:
+        #     render_dict['student'] = f'No available student in the {color} list.'
+        #     render_dict['student_id'] = 'None'
+
+        # if coursemember.role == 'instructor':
+        #     async_to_sync(channel_layer.group_send)(
+        #         f'course_{course.id}',
+        #         {
+        #             'type': 'send_message',
+        #             'key': 'next-student',
+        #             'send_auth_id': coursemember.id,
+        #             'value': render_dict['student_id']
+        #         }
+        #     )
+
+        # return JsonResponse(render_dict)
+
 
 
     @staticmethod
@@ -492,19 +540,14 @@ class HomeViews:
             list_lid = [2]
         if lid == 3 and course.points_upon_participation_in_red_list == 0:
             list_lid = [3]
-        if lid == 3 and course.points_upon_participation_in_yellow_list == 0:
+        if lid == 4 and course.points_upon_participation_in_yellow_list == 0:
             list_lid = [4]
 
-        # if lid == 1 or lid ==2:
-        #     list_lid = [1,2]
-        # elif lid ==3:
-        #     list_lid = [3]
-
         if coursemember.role == 'instructor':
-            if coursemember.hand_up == False:
-                render_dict['student'] = "You should enable the hand up feature for the Green list first."
-                render_dict['student_id']= 'None'
-                return JsonResponse(render_dict)
+        #     if coursemember.hand_up == False:
+        #         render_dict['student'] = "You should enable the hand up feature for the Green list first."
+        #         render_dict['student_id']= 'None'
+        #         return JsonResponse(render_dict)
 
             if lid == 1 : 
                 students = CourseMember.objects.filter(course = course, hand_up= True
@@ -536,9 +579,6 @@ class HomeViews:
                         participation_list__in = list_lid,
                         count_in_calculations = True
                     ).exists():
-                        # student.participation_points += 10
-                        # student.first_hand_up = False
-                        # student.save()
                         CourseParticipation.objects.create(
                             participant  = student, 
                             time_participated = time_of_request,
@@ -546,10 +586,7 @@ class HomeViews:
                             spoke_upon_participation = False,
                             participation_list= lid
                         )
-                    # elif student.hand_up == True and student.first_hand_up == False:
                     else:
-                        # student.participation_points += 1
-                        # student.save()
                         CourseParticipation.objects.create(
                             participant  = student, 
                             time_participated = time_of_request,
@@ -578,19 +615,7 @@ class HomeViews:
                         ).exists():
                         date_first_class_ends = timezone.now()
                         date_first_class_ends.replace(hour =22, minute = 00)
-                        # if participations_to_consider.filter(participant_id  = std_id, time_participated__lte = date_first_class_ends).exists() and timezone.now().time() > datetime.time(22, 00, 00, 000000):
-                        if False:
-                            CourseParticipation.objects.create(
-                                participant_id  = std_id, 
-                                time_participated = time_of_request,
-                                participation_points_gained = participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations,
-                                spoke_upon_participation = False,
-                                participation_list= lid,
-                                real_participation = False,
-                                count_in_calculations = False
-                            )
-                        else:
-                            CourseParticipation.objects.create(
+                        CourseParticipation.objects.create(
                                 participant_id  = std_id, 
                                 time_participated = time_of_request,
                                 participation_points_gained = participation_points_to_gain * course.fraction_of_points_gained_upon_further_participations,
@@ -602,8 +627,7 @@ class HomeViews:
 
             
             students_to_speak = chosen_student
-            # list_of_spoken= []
-            # list_of_unspoken=[]
+
             if students_to_speak.exists():
                 if not CourseParticipation.objects.filter(
                         participant = chosen_student[0],
@@ -616,9 +640,6 @@ class HomeViews:
                     render_dict['student']= unspoken_student.user.first_name +' '+unspoken_student.user.last_name
                     render_dict['color'] = color
                     render_dict['student_id']= unspoken_student.user.username
-                    print (render_dict)
-                    # unspoken_student.spoken= True
-                    # unspoken_student.time_spoken = time_of_request
 
                     if lid == 1:
                         unspoken_student.hand_up = False
@@ -638,13 +659,9 @@ class HomeViews:
                     new_participation.save()
                     
                 else:
-                    # spoken_students = students_to_speak.filter(spoken='True').order_by('?')
                     spoken_students = chosen_student
                     if spoken_students.exists():
-                        # for std in spoken_students:
-                        #     list_of_spoken.append(std.user.first_name +' '+std.user.last_name)
                         spoken_student= spoken_students[0]
-                        # spoken_student.hand_up = False
                         if lid == 1:
                             spoken_student.hand_up = False
                         elif lid ==2:
@@ -665,13 +682,6 @@ class HomeViews:
                         new_participation.spoke_upon_participation = True
                         new_participation.save()
 
-            # else:
-            #     render_dict['student']= 'No available student in the Green list.'
-            #     render_dict['student_id']= 'None'
-
-            # render_dict['list_of_unspoken'] = list_of_unspoken
-            # render_dict['list_of_spoken'] = list_of_spoken
-            
             if coursemember.role == 'instructor':
                 async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
@@ -932,8 +942,10 @@ class HomeViews:
         coursemember.hand_up_list_3 = True
         coursemember.hand_up_list_4 = True
         coursemember.save()
+        
+        send_message = request.GET.get('send_message') == "true"
 
-        if coursemember.role == "instructor":
+        if coursemember.role == "instructor" and send_message:
             async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
                 {
@@ -953,6 +965,8 @@ class HomeViews:
         CoursePermissions.require_course_member(request.user, cid)
         course = Course._default_manager.get(id=cid)
         coursemember = CourseBase.get_course_member(request.user, course.id)
+        send_message = request.GET.get('send_message') == "true"
+
         if coursemember.role == "instructor":
             if lid == 1:
                 coursemember.hand_up = True
@@ -960,7 +974,8 @@ class HomeViews:
                 coursemember.save()
                 color = 'Green'
 
-                async_to_sync(channel_layer.group_send)(
+                if send_message:
+                    async_to_sync(channel_layer.group_send)(
                     f'course_{course.id}',
                     {
                         'type': 'send_message',
@@ -974,7 +989,8 @@ class HomeViews:
                 coursemember.save()
                 color = 'Blue'
 
-                async_to_sync(channel_layer.group_send)(
+                if send_message:
+                    async_to_sync(channel_layer.group_send)(
                     f'course_{course.id}',
                     {
                         'type': 'send_message',
@@ -987,7 +1003,8 @@ class HomeViews:
                 coursemember.save()
                 color = 'Red'
 
-                async_to_sync(channel_layer.group_send)(
+                if send_message:
+                    async_to_sync(channel_layer.group_send)(
                     f'course_{course.id}',
                     {
                         'type': 'send_message',
@@ -1001,7 +1018,8 @@ class HomeViews:
                 coursemember.save()
                 color = 'Yellow'
 
-                async_to_sync(channel_layer.group_send)(
+                if send_message:
+                    async_to_sync(channel_layer.group_send)(
                     f'course_{course.id}',
                     {
                         'type': 'send_message',
@@ -1034,8 +1052,6 @@ class HomeViews:
                                 render_dict['hand'] = 'Your hand is up in the Green list. '
                             else:
                                 render_dict['hand'] = 'The Green list is disabled by the instructor for now.'
-
-                        print('Raise hand green, coursemember.id', coursemember.id)
 
                         async_to_sync(channel_layer.group_send)(
                         f'course_{course.id}',
@@ -1203,6 +1219,7 @@ class HomeViews:
         
         coursemember.hand_up = False
         coursemember.save()
+        send_message = request.GET.get('send_message') == "true"
 
         if coursemember.role == "student":
             async_to_sync(channel_layer.group_send)(
@@ -1220,13 +1237,14 @@ class HomeViews:
                 student.hand_up= False
                 student.save()
 
-            async_to_sync(channel_layer.group_send)(
-                f'course_{course.id}',
-                {
-                    'type': 'send_message',
-                    'key': 'disable-hand',
-                    'send_auth_id': coursemember.id
-                })
+            if send_message:
+                async_to_sync(channel_layer.group_send)(
+                    f'course_{course.id}',
+                    {
+                        'type': 'send_message',
+                        'key': 'disable-hand',
+                        'send_auth_id': coursemember.id
+                    })
 
         return HttpResponse('hand up was disabled.')
 
@@ -1244,6 +1262,8 @@ class HomeViews:
         
         coursemember.hand_up_list_2 = False
         coursemember.save()
+        
+        send_message = request.GET.get('send_message') == "true"
 
         if coursemember.role == "student":
             async_to_sync(channel_layer.group_send)(
@@ -1261,7 +1281,8 @@ class HomeViews:
                 student.hand_up_list_2= False
                 student.save()
 
-            async_to_sync(channel_layer.group_send)(
+            if send_message:
+                async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
                 {
                     'type': 'send_message',
@@ -1285,6 +1306,8 @@ class HomeViews:
         
         coursemember.hand_up_list_3 = False
         coursemember.save()
+        
+        send_message = request.GET.get('send_message') == "true"
 
         if coursemember.role == "student":
             async_to_sync(channel_layer.group_send)(
@@ -1302,7 +1325,8 @@ class HomeViews:
                 student.hand_up_list_3= False
                 student.save()
 
-            async_to_sync(channel_layer.group_send)(
+            if send_message:
+                async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
                 {
                     'type': 'send_message',
@@ -1326,6 +1350,8 @@ class HomeViews:
         
         coursemember.hand_up_list_4 = False
         coursemember.save()
+        
+        send_message = request.GET.get('send_message') == "true"
 
         if coursemember.role == "student":
             async_to_sync(channel_layer.group_send)(
@@ -1343,7 +1369,8 @@ class HomeViews:
                 student.hand_up_list_4= False
                 student.save()
 
-            async_to_sync(channel_layer.group_send)(
+            if send_message:
+                async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
                 {
                     'type': 'send_message',
@@ -1371,6 +1398,8 @@ class HomeViews:
         coursemember.hand_up_list_3 = False
         coursemember.hand_up_list_4 = False
         coursemember.save()
+        
+        send_message = request.GET.get('send_message') == "true"
 
         if coursemember.role == "student":
             async_to_sync(channel_layer.group_send)(
@@ -1390,7 +1419,8 @@ class HomeViews:
                 student.hand_up_list_4= False
                 student.save()
 
-            async_to_sync(channel_layer.group_send)(
+            if send_message:
+                async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
                 {
                     'type': 'send_message',
@@ -1570,43 +1600,55 @@ class HomeViews:
                 count_in_calculations = True
             ).order_by('-time_participated')
             
-            all_spoken_students = spoken_participations.filter(participation_list = 1)
-            green_already_spoken_count = len(all_spoken_students.order_by().values_list('participant',flat= True).distinct())
+            all_spoken_students = spoken_participations.filter(participation_list__in = [1,2,3,4])
+            # green_already_spoken_count = len(all_spoken_students.order_by().values_list('participant',flat= True).distinct())
             spoken_students = list(all_spoken_students.filter(participant__hand_up = True).order_by().values_list('participant',flat= True).distinct())
-            list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(students) if x.id not in spoken_students]
-            unspoken_count= len(list_of_unspoken)
-            spoken_count = len(spoken_students)
-            
-            blue_students = all_students.filter(hand_up_list_2= True).order_by('time_spoken')
-            all_blue_spoken_students = spoken_participations.filter(participation_list = 2)
-            blue_already_spoken_count = len(all_blue_spoken_students.order_by().values_list('participant',flat= True).distinct())
-            blue_spoken_students = list(all_blue_spoken_students.filter(participant__hand_up_list_2 = True).order_by().values_list('participant',flat= True).distinct())
-            blue_list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(blue_students) if x.id not in blue_spoken_students]
+            green_already_spoken_count = len(spoken_students)
 
-            blue_unspoken_count= len(blue_list_of_unspoken)
-            blue_spoken_count = len(blue_spoken_students)
+
+            blue_students = all_students.filter(hand_up_list_2= True).order_by('time_spoken')
+            # all_blue_spoken_students = spoken_participations.filter(participation_list = 2)
+            all_blue_spoken_students = all_spoken_students
+            # blue_already_spoken_count = len(all_blue_spoken_students.order_by().values_list('participant',flat= True).distinct())
+            blue_spoken_students = list(all_blue_spoken_students.filter(participant__hand_up_list_2 = True).order_by().values_list('participant',flat= True).distinct())
+            blue_already_spoken_count = len(blue_spoken_students)
+
+
 
             red_students = all_students.filter(hand_up_list_3= True).order_by('time_spoken')
-            all_red_spoken_students = spoken_participations.filter(participation_list = 3)
-            red_already_spoken_count = len(all_red_spoken_students.order_by().values_list('participant',flat= True).distinct())
-            red_spoken_students = list(spoken_participations.filter(participant__hand_up_list_3 = True).order_by().values_list('participant',flat= True).distinct())
-            red_list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(red_students) if x.id not in red_spoken_students]
+            # all_red_spoken_students = spoken_participations.filter(participation_list = 3)
+            all_red_spoken_students = all_spoken_students
+            # red_already_spoken_count = len(all_red_spoken_students.order_by().values_list('participant',flat= True).distinct())
+            red_spoken_students = list(all_red_spoken_students.filter(participant__hand_up_list_3 = True).order_by().values_list('participant',flat= True).distinct())
+            red_already_spoken_count = len(red_spoken_students)
 
-            red_unspoken_count= len(red_list_of_unspoken)
-            red_spoken_count = len(red_spoken_students)
 
 
             yellow_students = all_students.filter(hand_up_list_4= True).order_by('time_spoken')
-            all_yellow_spoken_students = spoken_participations.filter(participation_list = 4)
-            yellow_already_spoken_count = len(all_yellow_spoken_students.order_by().values_list('participant',flat= True).distinct())
-            yellow_spoken_students = list(spoken_participations.filter(participant__hand_up_list_4 = True).order_by().values_list('participant',flat= True).distinct())
-            yellow_list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(yellow_students) if x.id not in yellow_spoken_students]
+            # all_yellow_spoken_students = spoken_participations.filter(participation_list = 4)
+            all_yellow_spoken_students = all_spoken_students
+            # yellow_already_spoken_count = len(all_yellow_spoken_students.order_by().values_list('participant',flat= True).distinct())
+            yellow_spoken_students = list(all_yellow_spoken_students.filter(participant__hand_up_list_4 = True).order_by().values_list('participant',flat= True).distinct())
+            yellow_already_spoken_count = len(yellow_spoken_students)
 
+
+            spoken_lists = spoken_students + blue_spoken_students + red_spoken_students + yellow_spoken_students
+            spoken_lists_final = list(set(spoken_lists))
+
+            list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(students) if x.id not in spoken_lists_final]
+            blue_list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(blue_students) if x.id not in spoken_lists_final]
+            red_list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(red_students) if x.id not in spoken_lists_final]
+            yellow_list_of_unspoken = [[x.user.first_name,x.user.last_name,x.id] for x in list(yellow_students) if x.id not in spoken_lists_final]
+
+
+            unspoken_count= len(list_of_unspoken)
+            spoken_count = len(spoken_students)
+            blue_unspoken_count= len(blue_list_of_unspoken)
+            blue_spoken_count = len(blue_spoken_students)
+            red_unspoken_count= len(red_list_of_unspoken)
+            red_spoken_count = len(red_spoken_students)
             yellow_unspoken_count= len(yellow_list_of_unspoken)
             yellow_spoken_count = len(yellow_spoken_students)
-
-
-
 
             render_dict['count'] = 'Unspoken: '+'Green: '+ str(unspoken_count) + ', Blue: ' + str(blue_unspoken_count) + ', Red: ' + str(red_unspoken_count) + ', Yellow: ' + str(yellow_unspoken_count) + '</br>' + 'Spoken:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + 'Green: '+ str(spoken_count) + ', Blue: ' + str(blue_spoken_count) + ', Red: ' + str(red_spoken_count) + ', Yellow: ' + str(yellow_spoken_count)
             render_dict['count_spoken'] =  'Green: '+ str(green_already_spoken_count) + ', Blue: ' + str(blue_already_spoken_count) + ', Red: ' + str(red_already_spoken_count) + ', Yellow: ' + str(yellow_already_spoken_count) + '</br>' + '&nbsp;'           
@@ -1622,6 +1664,9 @@ class HomeViews:
                 red_already_spoken_count,
                 yellow_already_spoken_count
                 ]
+
+
+
 
             hand_raise_times = []
             list_of_spoken_temp = []
@@ -1657,7 +1702,9 @@ class HomeViews:
                 hand_raise_times_yellow.append(std.time_spoken)
                 yellow_list_of_spoken_temp.append([std.user.first_name,std.user.last_name,std.id])
 
+
             yellow_list_of_spoken = [x for _, x in sorted(zip(hand_raise_times_yellow, yellow_list_of_spoken_temp))]
+
 
         render_dict['list_of_unspoken'] = list_of_unspoken
         render_dict['blue_list_of_unspoken'] = blue_list_of_unspoken
@@ -1669,7 +1716,9 @@ class HomeViews:
         render_dict['red_list_of_spoken'] = red_list_of_spoken
         render_dict['yellow_list_of_spoken'] = yellow_list_of_spoken
 
-        if coursemember.role == "instructor":
+        # get send_message data
+        send_message = request.GET.get('send_message') == "true"
+        if coursemember.role == "instructor" and send_message:
             async_to_sync(channel_layer.group_send)(
                 f'course_{course.id}',
                 {
@@ -1706,31 +1755,10 @@ class HomeViews:
 
             already_spoken = []
             already_spoken_names = []
-            
-            green_already_spoken = []
-            blue_already_spoken = []
-            red_already_spoken = []
-            yellow_already_spoken = []
 
             for participation in spoken_participations:
-                if [participation.participant, participation.participation_list]  not in already_spoken_names:
-                    already_spoken_names.append([participation.participant, participation.participation_list])
-                    already_spoken.append([participation.participant, 'Green' if participation.participation_list == 1 else 'Blue' if participation.participation_list == 2 else 'Red' if participation.participation_list == 3 else 'Yellow'])
-
-                # if (participation.participation_list==1) and (participation.participant not in green_already_spoken):
-                #     green_already_spoken.append(participation.participant)
-
-                # if (participation.participation_list==2) and (participation.participant not in blue_already_spoken):
-                #     blue_already_spoken.append(participation.participant)
-
-                # if (participation.participation_list==3) and (participation.participant not in red_already_spoken):
-                #     red_already_spoken.append(participation.participant)
-
-            # green_already_spoken_count = len(green_already_spoken)
-            # blue_already_spoken_count = len(blue_already_spoken)
-            # red_already_spoken_count = len(red_already_spoken)
-
-            # render_dict['count_spoken'] =  'Count: '+'Green: '+ str(green_already_spoken_count) + ', Blue: ' + str(blue_already_spoken_count) + ', Red: ' + str(red_already_spoken_count) + '</br>' + '&nbsp;'
+                already_spoken_names.append([participation.participant, participation.participation_list])
+                already_spoken.append([participation.participant, 'Green' if participation.participation_list == 1 else 'Blue' if participation.participation_list == 2 else 'Red' if participation.participation_list == 3 else 'Yellow'])
 
             for std in already_spoken:
                 list_of_already_spoken.append([ std[0].user.first_name,std[0].user.last_name, std[1], '-' ])
@@ -1781,13 +1809,15 @@ class HomeViews:
                     participation_to_remove.count_in_calculations = False
                     participation_to_remove.save()
 
-                async_to_sync(channel_layer.group_send)(
-                f'course_{course.id}',
-                {
-                    'type': 'send_message',
-                    'key': 'undo-last-call',
-                    'send_auth_id': coursemember.id
-                })
+                send_message = request.GET.get('send_message') == "true"
+                if send_message:
+                    async_to_sync(channel_layer.group_send)(
+                    f'course_{course.id}',
+                    {
+                        'type': 'send_message',
+                        'key': 'undo-last-call',
+                        'send_auth_id': coursemember.id
+                    })
 
 
         time_of_request = timezone.now()

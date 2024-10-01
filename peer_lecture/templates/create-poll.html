@@ -20,6 +20,16 @@
     }
 
     fieldset span { font-size: 12px; }
+
+    input[name="poll-title"] {
+        width: 50%
+    }
+
+    @media screen and (max-width: 800px) {
+        input[name="poll-title"] {
+            width: 100%
+        }
+    }
 </style>
 
 <div>
@@ -31,9 +41,9 @@
         <fieldset>
             <legend>Title</legend>
             {% if edit_poll %}
-            <input style="width: 400px" class="form-control" type="text" name="poll-title" value="{{ edit_poll.title }}">
+            <input class="form-control" type="text" name="poll-title" value="{{ edit_poll.title }}">
             {% else %}
-            <input style="width: 400px" class="form-control" type="text" name="poll-title">
+            <input class="form-control" type="text" name="poll-title">
             {% endif %}
         </fieldset>
 

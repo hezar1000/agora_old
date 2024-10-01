@@ -1,8 +1,6 @@
 {% extends "form_simp_base.html" %}
 {% block content %}
 
-{% include "form_autosave.html" %}
-
 <!--
 <a class="btn btn-secondary" href="/course/{{ course.id }}/">Return to the Course Homepage</a>
 -->
@@ -30,34 +28,6 @@
       <input type="submit" class="btn btn-primary" value="Update Configuration">
 
     </form>
-
-    <script>$(document).ready(function () {
-          var typingTimer;
-          var doneTypingInterval = 500;
-
-          $('#courseForm').find(':input').on('input', function () {
-              clearTimeout(typingTimer);
-              typingTimer = setTimeout(function () {
-                  autosave();
-              }, doneTypingInterval);
-          });
-
-          function autosave() {
-            $.ajax({
-                  type: 'POST',
-                  data: $('#courseForm').serialize(),
-                  url: '/course/{{ course.id }}/edit/',
-                  success: function (data) {
-                      showFormSaveOverlay();
-                  },
-                  error: function (error) {
-                      console.log('Save error: ', error);
-                  },
-              });
-          }
-      });
-
-    </script>
 
     <div class="btn-group" role="group" aria-label="...">
       {% if course.browsable %}

@@ -1,9 +1,12 @@
 from django.conf.urls import url
 from django.urls import path
+from django.conf import settings
+from django.views.static import serve
 
 from .views import CourseViews
 
 urlpatterns = [
+    url(r"^static/(?P<path>.*)$", serve, settings.STATIC_DICT),
     url(r"^list/$", CourseViews.list, name="list"),  # list all the courses
     # instructor actions
     url(r"^create/$", CourseViews.create),  # create a course

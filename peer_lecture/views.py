@@ -58,50 +58,7 @@ class PollViews:
             if poll: data["poll"] = poll
 
         if request.method == 'POST':
-            if 'begin-lecture' in request.POST:
-                # create a new lecture, save it to the database
-                lecture = Lecture.create(course_id)
-                if lecture: data["lecture"] = Lecture.objects.get(lecture_id=lecture.pk)
-
-                async_to_sync(channel_layer.group_send)(
-                    f'course_{course_id}',
-                    {
-                        'type': 'send_message',
-                        'key': 'begin-lecture',
-                        'send_auth_id': auth_id
-                    })
-
-                return render(request, 'instructor-poll.html', data)
-            
-            elif 'end-lecture' in request.POST:
-                
-                # from Lecture, get the lecture id where course_id = course_id and end_time = null
-                lecture = Lecture.objects.filter(course_id=course_id, end_time__isnull=True).first()
-
-                if lecture:
-                    lecture_id = lecture.pk
-                    end_time = datetime.now()
-
-                    lecture = Lecture.endLecture(lecture_id, end_time)
-
-                if data.get("poll"):
-                    poll_id = data["poll"].pk
-                    poll = Poll.endPoll(poll_id, end_time)
-                    data["poll"] = None
-
-                data["lecture"] = None
-
-                async_to_sync(channel_layer.group_send)(
-                    f'course_{course_id}',
-                    {
-                        'type': 'send_message',
-                        'key': 'end-lecture',
-                        'send_auth_id': auth_id
-                    })
-
-                return render(request, 'instructor-poll.html', data)
-            
-            elif 'enable-polling' in request.POST:
+            if 'enable-polling' in request.POST:
                 polls = Poll.getSavedPolls(course_id)
                 if len(polls) > 0:
                     data['saved_polls'] = polls
@@ -229,7 +186,9 @@ class PollViews:
                 return render(request, 'instructor-poll.html', data)
 
             elif 'stop-poll' in request.POST:
-                lecture = data["lecture"]
+                # lecture = data["lecture"]
+                lecture = Lecture.objects.filter(course_id=course_id, end_time__isnull=True).first()
+
                 if data.get("poll"):
                     poll = data["poll"]
                 
@@ -259,6 +218,44 @@ class PollViews:
 
             return render(request, 'instructor-poll.html', data)
         
+        elif 'toggle-lecture' in request.GET:
+            print("toggle-lecture")
+            if lecture:
+                lecture_id = lecture.pk
+                end_time = datetime.now()
+
+                lecture = Lecture.endLecture(lecture_id, end_time)
+
+                if data.get("poll"):
+                    poll_id = data["poll"].pk
+                    poll = Poll.endPoll(poll_id, end_time)
+                    data["poll"] = None
+
+                data["lecture"] = None
+
+                async_to_sync(channel_layer.group_send)(
+                    f'course_{course_id}',
+                    {
+                        'type': 'send_message',
+                        'key': 'end-lecture',
+                        'send_auth_id': auth_id
+                    })
+                
+                return JsonResponse({'begin': False})
+            else:
+                lecture = Lecture.create(course_id)
+                if lecture: data["lecture"] = Lecture.objects.get(lecture_id=lecture.pk)
+
+                async_to_sync(channel_layer.group_send)(
+                    f'course_{course_id}',
+                    {
+                        'type': 'send_message',
+                        'key': 'begin-lecture',
+                        'send_auth_id': auth_id
+                    })
+
+                return JsonResponse({'begin': True})
+
         elif 'update-results' in request.GET:
             poll_id = request.GET.get('update-results')
             results = Poll.getResults(poll_id)

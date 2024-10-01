@@ -46,6 +46,8 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
 
     async def send_message(self, e):
         try:
+            eventLogger.info(f'[{self.auth_id}] sending message to course [{self.room_group_name}]; Key: {e["key"]}, Value: {e.get("value", None)}')
+            
             if int(e['send_auth_id']) != int(self.auth_id):
                 await self.send(text_data=json.dumps({
                     'key': e['key'],
